@@ -1,0 +1,2 @@
+gaia_metal_poor.json filter=lfs diff=lfs merge=lfs -text
+gaia_nearby_plx10.json filter=lfs diff=lfs merge=lfs -text
