@@ -1,0 +1,33 @@
+name: refresh-catalogs
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refresh data sources
+        run: python3 scripts/refresh_all.py
+      - name: Upload to Release v1.0
+        run: |
+          for f in data/horizons_*.json data/ndbc_*.json data/jpl_*.json data/swpc_*.json; do
+            if [ -f "$f" ]; then
+              gh release upload v1.0 "$f" --clobber
+              echo "uploaded $f"
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit data snapshot (audit trail)
+        run: |
+          git config user.name "omegaflow-bot"
+          git config user.email "bot@omegaflow.space"
+          git add data/
+          git diff --staged --quiet || git commit -m "refresh $(date -u +'%Y-%m-%dT%H:%MZ')"
+          git push
