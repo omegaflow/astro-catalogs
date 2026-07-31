@@ -65,17 +65,17 @@ NDBC_BUOYS = [
 
 
 def refresh_ndbc():
-    """Fetch latest observations for each NDBC buoy. Returns {buoy_id: raw_text}."""
-    result = {}
+    """Fetch latest observations for each NDBC buoy. Individual text files per buoy."""
+    changed = False
     for buoy_id in NDBC_BUOYS:
         url = f"https://www.ndbc.noaa.gov/data/realtime2/{buoy_id}.txt"
         status, body = fetch(url)
         if status == 200 and body:
-            result[str(buoy_id)] = body.decode(errors="replace")
+            changed |= save_if_changed(f"ndbc_{buoy_id}", {"text": body.decode(errors="replace")})
         else:
             print(f"  NDBC {buoy_id}: HTTP {status} or empty")
         time.sleep(0.5)
-    return result
+    return changed
 
 
 # ─── JPL HORIZONS VECTORS ─────────────────────────────────────
@@ -103,12 +103,12 @@ HORIZONS_BODIES = [
 
 
 def refresh_horizons():
-    """Fetch JPL Horizons vectors for solar system bodies. Sequential with 2s delay."""
-    result = {}
-    # Today to tomorrow for daily ephemeris
+    """Fetch JPL Horizons vectors for solar system bodies. Individual files per body.
+    Sequential with 2s delay (JPL rate limit: ~30 req/min)."""
     from urllib.parse import quote
     today = time.strftime("%Y-%m-%d")
     tomorrow = time.strftime("%Y-%m-%d", time.localtime(time.time() + 86400))
+    changed = False
     for name, command in HORIZONS_BODIES:
         url = (
             f"https://ssd.jpl.nasa.gov/api/horizons.api?format=json"
@@ -123,21 +123,25 @@ def refresh_horizons():
         )
         data = fetch_json(url)
         if data:
-            result[name] = data
-            print(f"  {name}: OK")
+            changed |= save_if_changed(f"horizons_{name}", data)
         else:
             print(f"  {name}: FAILED")
-        time.sleep(2)  # JPL rate limit: ~30 req/min
-    return result
+        time.sleep(2)
+    return changed  # return True if any body changed
 
 
 # ─── JPL FIREBALLS + CLOSE APPROACH ───────────────────────────
 
 def refresh_jpl():
-    """Fetch JPL fireball and close-approach data for today."""
+    """Fetch JPL fireball and close-approach data."""
     fireball = fetch_json("https://ssd-api.jpl.nasa.gov/fireball.api?limit=100&sort=date")
     cad = fetch_json(f"https://ssd-api.jpl.nasa.gov/cad.api?dist-max=10LD&limit=200")
-    return {"fireball": fireball, "cad": cad}
+    changed = False
+    if fireball:
+        changed |= save_if_changed("jpl_fireball", {"fireball": fireball})
+    if cad:
+        changed |= save_if_changed("jpl_cad", {"cad": cad})
+    return changed
 
 
 # ─── SWPC SOLAR WIND ──────────────────────────────────────────
@@ -151,16 +155,16 @@ SWPC_URLS = {
 
 
 def refresh_swpc():
-    """Fetch SWPC solar wind data (small, <100KB each)."""
-    result = {}
+    """Fetch SWPC solar wind data. Individual files per dataset."""
+    changed = False
     for name, url in SWPC_URLS.items():
         data = fetch_json(url)
         if data:
-            result[name] = data
+            changed |= save_if_changed(name, data)
         else:
             print(f"  {name}: FAILED")
         time.sleep(1)
-    return result
+    return changed
 
 
 # ─── MAIN ──────────────────────────────────────────────────────
@@ -174,16 +178,13 @@ MODULES = [
 
 if __name__ == "__main__":
     print(f"=== omegaflow catalogs refresh {time.strftime('%Y-%m-%dT%H:%M:%SZ')} ===")
-    changed = False
+    any_changed = False
     for name, func in MODULES:
         print(f"[{name}]")
         try:
-            data = func()
-            if data:
-                if save_if_changed(name, data):
-                    changed = True
+            any_changed |= func()
         except Exception as e:
             print(f"  CRASH {name}: {e}")
 
-    print(f"\nDone. Changed: {changed}")
+    print(f"\nDone. Changed: {any_changed}")
     sys.exit(0)
