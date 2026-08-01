@@ -120,6 +120,57 @@ HORIZONS_BODIES = [
     ("comet_c2023_a3", "DES=C/2023 A3"),
 ]
 
+# Orbit trace bodies (full year ephemeris)
+ORBIT_BODIES = [
+    ("sun", "10"),
+    ("mercury", "199"),
+    ("venus", "299"),
+    ("earth", "399"),
+    ("moon", "301"),
+    ("mars", "499"),
+    ("jupiter", "599"),
+    ("io", "501"),
+    ("europa", "502"),
+    ("ganymede", "503"),
+    ("callisto", "504"),
+    ("saturn", "699"),
+    ("titan", "606"),
+    ("enceladus", "602"),
+    ("uranus", "799"),
+    ("neptune", "899"),
+    ("triton", "801"),
+    ("pluto", "999"),
+    ("ceres", "Ceres"),
+    ("vesta", "Vesta"),
+    ("eris", "Eris"),
+    ("haumea", "Haumea"),
+    ("makemake", "Makemake"),
+]
+
+# Observer queries (Earth-based view of outer planets)
+OBSERVER_BODIES = [
+    ("jupiter", "599"),
+    ("mars", "499"),
+    ("saturn", "699"),
+]
+
+# Mass queries
+MASS_BODIES = {
+    "earth": "399",
+    "jupiter": "599",
+    "mars": "499",
+    "mercury": "199",
+    "neptune": "899",
+    "saturn": "699",
+    "uranus": "799",
+    "venus": "299",
+}
+
+# Apophis elements
+ELEMENTS_BODIES = [
+    ("apophis", "99942"),
+]
+
 
 def refresh_horizons():
     """Fetch JPL Horizons vectors for solar system bodies. Individual files per body.
@@ -186,10 +237,115 @@ def refresh_swpc():
     return changed
 
 
+# ─── ORBIT TRACES (full-year ephemeris) ──────────────────────
+
+def refresh_orbits():
+    from urllib.parse import quote
+    year = time.strftime("%Y")
+    start = f"{year}-01-01"
+    end = f"{year}-12-31"
+    changed = False
+    for name, command in ORBIT_BODIES:
+        url = (
+            f"https://ssd.jpl.nasa.gov/api/horizons.api?format=json"
+            f"&COMMAND=%27{quote(command)}%27"
+            f"&OBJ_DATA=%27NO%27"
+            f"&MAKE_EPHEM=%27YES%27"
+            f"&EPHEM_TYPE=%27VECTORS%27"
+            f"&CENTER=%27500@0%27"
+            f"&START_TIME=%27{quote(start)}%27"
+            f"&STOP_TIME=%27{quote(end)}%27"
+            f"&STEP_SIZE=%271%20d%27"
+        )
+        data = fetch_json(url)
+        if data:
+            changed |= save_if_changed(f"orbit_{name}", data)
+        else:
+            print(f"  {name}: FAILED")
+        time.sleep(2)
+    return changed
+
+
+# ─── JPL MASS QUERIES ─────────────────────────────────────────
+
+def refresh_mass():
+    changed = False
+    for name, command in MASS_BODIES.items():
+        url = f"https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND={command}&OBJ_DATA=YES"
+        data = fetch_json(url)
+        if data:
+            changed |= save_if_changed(f"mass_{name}", data)
+        else:
+            print(f"  {name}: FAILED")
+        time.sleep(2)
+    return changed
+
+
+# ─── JPL OBSERVER QUERIES ─────────────────────────────────────
+
+def refresh_observer():
+    from urllib.parse import quote
+    today = time.strftime("%Y-%m-%d")
+    changed = False
+    for name, command in OBSERVER_BODIES:
+        url = (
+            f"https://ssd.jpl.nasa.gov/api/horizons.api?format=text"
+            f"&COMMAND=%27{quote(command)}%27"
+            f"&OBJ_DATA=%27NO%27"
+            f"&MAKE_EPHEM=%27YES%27"
+            f"&EPHEM_TYPE=%27OBSERVER%27"
+            f"&CENTER=%27500@399%27"
+            f"&START_TIME=%27{quote(today)}%27"
+            f"&STOP_TIME=%27{quote(today)}%27"
+            f"&STEP_SIZE=%271%20d%27"
+            f"&QUANTITIES=%271,2,3,4,20%27"
+        )
+        status, body = fetch(url)
+        if status == 200 and body:
+            changed |= save_if_changed(f"observer_{name}", {"text": body.decode(errors="replace")})
+        else:
+            print(f"  {name}: FAILED")
+        time.sleep(2)
+    return changed
+
+
+# ─── JPL ELEMENTS ────────────────────────────────────────────
+
+def refresh_elements():
+    from urllib.parse import quote
+    today = time.strftime("%Y-%m-%d")
+    tomorrow = time.strftime("%Y-%m-%d", time.localtime(time.time() + 86400))
+    changed = False
+    for name, command in ELEMENTS_BODIES:
+        url = (
+            f"https://ssd.jpl.nasa.gov/api/horizons.api?format=text"
+            f"&COMMAND=%27{quote(command)}%27"
+            f"&OBJ_DATA=%27YES%27"
+            f"&MAKE_EPHEM=%27YES%27"
+            f"&EPHEM_TYPE=%27ELEMENTS%27"
+            f"&CENTER=%27@0%27"
+            f"&START_TIME=%27{quote(today)}%27"
+            f"&STOP_TIME=%27{quote(tomorrow)}%27"
+            f"&STEP_SIZE=%271+d%27"
+            f"&REF_PLANE=%27ECLIPTIC%27"
+        )
+        status, body = fetch(url)
+        if status == 200 and body:
+            changed |= save_if_changed(f"elements_{name}", {"text": body.decode(errors="replace")})
+        else:
+            print(f"  {name}: FAILED")
+        time.sleep(2)
+    return changed
+
+
 # ─── MAIN ──────────────────────────────────────────────────────
 
 MODULES = [
     ("horizons", refresh_horizons),
+    ("orbits", refresh_orbits),
+    ("observer", refresh_observer),
+    ("mass", refresh_mass),
+    ("elements", refresh_elements),
     ("jpl", refresh_jpl),
     ("ndbc", refresh_ndbc),
     ("swpc", refresh_swpc),
