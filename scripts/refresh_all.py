@@ -109,9 +109,9 @@ HORIZONS_BODIES = [
     ("solar_orbiter", "-144"),
     ("ceres", "Ceres"),
     ("vesta", "Vesta"),
-    ("eris", "Eris"),
-    ("haumea", "Haumea"),
-    ("makemake", "Makemake"),
+    ("eris", "136199"),
+    ("haumea", "136108"),
+    ("makemake", "136472"),
     ("apophis", "99942"),
     ("bennu", "DES=2101955"),
     ("halley", "90000001"),
@@ -142,9 +142,9 @@ ORBIT_BODIES = [
     ("pluto", "999"),
     ("ceres", "Ceres"),
     ("vesta", "Vesta"),
-    ("eris", "Eris"),
-    ("haumea", "Haumea"),
-    ("makemake", "Makemake"),
+    ("eris", "136199"),
+    ("haumea", "136108"),
+    ("makemake", "136472"),
 ]
 
 # Observer queries (Earth-based view of outer planets)
@@ -301,10 +301,10 @@ def refresh_observer():
             f"&QUANTITIES=%271,2,3,4,20%27"
         )
         status, body = fetch(url)
-        if status == 200 and body:
+        if status == 200 and body and len(body) > 200:
             changed |= save_if_changed(f"observer_{name}", {"text": body.decode(errors="replace")})
         else:
-            print(f"  {name}: FAILED")
+            print(f"  {name}: FAILED (status={status}, size={len(body) if body else 0})")
         time.sleep(2)
     return changed
 
