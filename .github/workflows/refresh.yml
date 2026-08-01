@@ -24,6 +24,31 @@ jobs:
           done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: TAP tables -> CDN
+        run: |
+          TABLES=(
+            "vizier|J/A+A/558/A53/catalog"
+            "vizier|J/A+A/570/A106/void"
+            "vizier|J/A+A/594/A27/psz2"
+            "vizier|J/ApJ/851/48/table1"
+            "vizier|J/ApJ/852/22/sample"
+            "vizier|J/ApJ/935/170/table4"
+            "vizier|J/ApJ/938/110/table7"
+            "vizier|J/ApJS/229/28/table1"
+            "vizier|VII/278/snrs"
+          )
+          mkdir -p data data/uploaded
+          for entry in "${TABLES[@]}"; do
+            IFS='|' read -r service table <<< "$entry"
+            echo "  TAP: $service/$table"
+            python3 scripts/tap_downloader.py "$service" "$table" && \
+              for f in data/tap_*.json; do
+                [ -f "$f" ] && gh release upload v1.0 "$f" --clobber && mv "$f" "data/uploaded/"
+              done
+            sleep 2
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Commit data snapshot (audit trail)
         run: |
           git config user.name "omegaflow-bot"
