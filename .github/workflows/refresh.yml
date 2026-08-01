@@ -56,12 +56,17 @@ jobs:
               done
             sleep 2
           done
+          # Remove uploaded data from git tracking (too large for git)
+          rm -f data/tap_*.json data/tap_*.csv 2>/dev/null
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Commit data snapshot (audit trail)
         run: |
           git config user.name "omegaflow-bot"
           git config user.email "bot@omegaflow.space"
-          git add data/
+          # Exclude tap data files from git (too large, already on Release)
+          echo 'data/tap_*.json' >> .gitignore
+          echo 'data/tap_*.csv' >> .gitignore
+          git add data/ .gitignore
           git diff --staged --quiet || git commit -m "refresh $(date -u +'%Y-%m-%dT%H:%MZ')"
           git push
