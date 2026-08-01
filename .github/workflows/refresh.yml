@@ -27,7 +27,6 @@ jobs:
       - name: TAP tables -> CDN
         run: |
           TABLES=(
-            "vizier|J/A+A/558/A53/catalog"
             "vizier|J/A+A/570/A106/void"
             "vizier|J/A+A/594/A27/psz2"
             "vizier|J/ApJ/851/48/table1"
@@ -36,6 +35,18 @@ jobs:
             "vizier|J/ApJ/938/110/table7"
             "vizier|J/ApJS/229/28/table1"
             "vizier|VII/278/snrs"
+            "heasarc|integralburst"
+            "heasarc|nicermastr"
+            "heasarc|batsegrb"
+            "heasarc|batsepulsr"
+            "heasarc|xmm4d13s"
+            "heasarc|chandracsc2"
+            "heasarc|rosmaster"
+            "heasarc|fermilpsc"
+            "heasarc|fermi4lac"
+            "heasarc|swiftmastr"
+            "irsa|neowiser_p1bs_psd"
+            "irsa|allwise_p3as_psd"
           )
           mkdir -p data data/uploaded
           for entry in "${TABLES[@]}"; do

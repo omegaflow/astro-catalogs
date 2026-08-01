@@ -10,18 +10,29 @@ TAP_CONFIGS = {
         "params": "request=doQuery&lang=ADQL&format=json",
         "max_top": 200000,
         "ra_col": "RAJ2000",
+        "quote_table": True,
     },
     "heasarc": {
-        "url": "https://heasarc.gsfc.nasa.gov/xamin/vo/tap",  
-        "params": "REQUEST=doQuery&LANG=ADQL&FORMAT=json",
+        "url": "https://heasarc.gsfc.nasa.gov/xamin/vo/tap/sync",
+        "params": "REQUEST=doQuery&LANG=ADQL&FORMAT=csv",
         "max_top": 100000,
         "ra_col": "ra",
+        "quote_table": False,
+        "format": "csv",
     },
     "irsa": {
         "url": "https://irsa.ipac.caltech.edu/TAP/sync",
-        "params": "REQUEST=doQuery&LANG=ADQL&FORMAT=json",
-        "max_top": 100000,
+        "params": "LANG=ADQL&FORMAT=json",
+        "max_top": 50000,
         "ra_col": "ra",
+        "quote_table": False,
+    },
+    "gaia": {
+        "url": "https://gea.esac.esa.int/tap-server/tap/sync",
+        "params": "REQUEST=doQuery&LANG=ADQL&FORMAT=json",
+        "max_top": 50000,
+        "ra_col": "ra",
+        "quote_table": False,
     },
 }
 
@@ -32,7 +43,20 @@ def tap_query(service, query, timeout=120):
     for attempt in range(3):
         try:
             r = urllib.request.urlopen(req, timeout=timeout, context=ctx)
-            return json.loads(r.read())
+            body = r.read()
+            if cfg.get("format") == "csv":
+                # Parse CSV: header line then data lines
+                text = body.decode("utf-8", errors="replace")
+                lines = [l.strip() for l in text.split("\n") if l.strip()]
+                if not lines: return None
+                header = lines[0].split(",")
+                data = []
+                for ln in lines[1:]:
+                    vals = ln.split(",")
+                    if len(vals) == len(header):
+                        data.append(vals)
+                return {"metadata": [{"name": h} for h in header], "data": data}
+            return json.loads(body)
         except Exception as e:
             if attempt == 2: raise
             time.sleep(3)
@@ -41,23 +65,23 @@ def download_table(service, table_id, max_rows=None):
     cfg = TAP_CONFIGS[service]
     
     # Get columns
-    d = tap_query(service, f'SELECT TOP 1 * FROM "{table_id}"', timeout=30)
+    table_ref = f'"{table_id}"' if cfg.get("quote_table", False) else table_id
+    d = tap_query(service, f'SELECT TOP 1 * FROM {table_ref}', timeout=30)
     if not d or "metadata" not in d:
         print(f"  no metadata", flush=True)
         return None
     cols = [m["name"] for m in d["metadata"]]
     ra_col = cfg["ra_col"]
     if ra_col not in cols:
-        # Try alternative RA column names
-        for alt in ["RAJ2000","_RA","ra_epoch","s_ra"]:
+        for alt in ["RAJ2000","_RA","ra_epoch","s_ra","right_ascension","raj2000"]:
             if alt in cols:
                 ra_col = alt
                 break
     
-    col_str = ",".join(f'"{c}"' for c in cols)
+    col_str = ",".join(f'"{c}"' if cfg.get("quote_table", False) else c for c in cols)
     
     # Try single query first
-    d = tap_query(service, f'SELECT TOP {cfg["max_top"]} {col_str} FROM "{table_id}"', timeout=60)
+    d = tap_query(service, f'SELECT TOP {cfg["max_top"]} {col_str} FROM {table_ref}', timeout=60)
     if not d or "data" not in d:
         print(f"  query failed", flush=True)
         return None
@@ -75,7 +99,7 @@ def download_table(service, table_id, max_rows=None):
     lo, step, hi_max = 0, 5, 365 if ra_col.startswith("_") else 360
     while lo < hi_max:
         hi = min(lo + step, hi_max)
-        q = f'SELECT {col_str} FROM "{table_id}" WHERE {ra_col} >= {lo} AND {ra_col} < {hi}'
+        q = f'SELECT {col_str} FROM {table_ref} WHERE {ra_col} >= {lo} AND {ra_col} < {hi}'
         try:
             d = tap_query(service, q, timeout=60)
             chunk = d["data"] if d and "data" in d else []
