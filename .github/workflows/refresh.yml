@@ -60,6 +60,18 @@ jobs:
           rm -f data/tap_*.json data/tap_*.csv 2>/dev/null
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Gaia DR3 -> CDN
+        run: |
+          echo "Downloading Gaia DR3 bright stars (mag<13)"
+          python3 scripts/gaia_downloader.py 13
+          if [ -f "data/gaia_mag13.json" ] && [ -s "data/gaia_mag13.json" ]; then
+            gh release upload v1.0 data/gaia_mag13.json --clobber
+            echo "uploaded gaia_mag13.json ($(wc -c < data/gaia_mag13.json) bytes)"
+          else
+            echo "::warning::Gaia mag13 download failed"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Commit data snapshot (audit trail)
         run: |
           git config user.name "omegaflow-bot"
@@ -67,6 +79,7 @@ jobs:
           # Exclude tap data files from git (too large, already on Release)
           echo 'data/tap_*.json' >> .gitignore
           echo 'data/tap_*.csv' >> .gitignore
+          echo 'data/gaia_mag*.json' >> .gitignore
           git add data/ .gitignore
           git diff --staged --quiet || git commit -m "refresh $(date -u +'%Y-%m-%dT%H:%MZ')"
           git push
