@@ -88,9 +88,19 @@ def download_table(service, table_id, max_rows=None):
     rows = d["data"]
     
     if len(rows) < cfg["max_top"]:
-        # Fits in one query
+        # Fits in one query — save directly
         out = [{cols[i]: r[i] for i in range(min(len(cols), len(r)))} for r in rows]
-        print(f"  single query: {len(out)} rows", flush=True)
+        fn = f"data/tap_{service}_{table_id.replace('/','_').replace('+','plus')}.json"
+        if cfg.get("format") == "csv":
+            fn = fn.replace(".json", ".csv")
+            with open(fn, "w") as f:
+                f.write(",".join(cols) + "\n")
+                for r in rows:
+                    f.write(",".join(str(x) if x is not None else "" for x in r) + "\n")
+        else:
+            with open(fn, "w") as f:
+                json.dump(out, f)
+        print(f"  single query: {len(out)} rows -> {os.path.getsize(fn)//1024}KB", flush=True)
         return out
     
     # Giant table — paginate by RA range
