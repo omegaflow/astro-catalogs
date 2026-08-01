@@ -35,16 +35,14 @@ jobs:
             "vizier|J/ApJ/938/110/table7"
             "vizier|J/ApJS/229/28/table1"
             "vizier|VII/278/snrs"
-            "heasarc|integralburst"
-            "heasarc|nicermastr"
-            "heasarc|batsegrb"
-            "heasarc|batsepulsr"
-            "heasarc|xmm4d13s"
-            "heasarc|chandracsc2"
-            "heasarc|rosmaster"
-            "heasarc|fermilpsc"
-            "heasarc|fermi4lac"
-            "heasarc|swiftmastr"
+            # HEASARC needs VOTable parser (doesn't support CSV/JSON)
+            # "heasarc|integralburst"
+            # "heasarc|nicermastr"
+            # "heasarc|batsegrb"
+            # "heasarc|xmm4d13s"
+            # "heasarc|chandracsc2"
+            # "heasarc|fermilpsc"
+            # "heasarc|fermi4lac"
             "irsa|neowiser_p1bs_psd"
             "irsa|allwise_p3as_psd"
           )
@@ -53,7 +51,7 @@ jobs:
             IFS='|' read -r service table <<< "$entry"
             echo "  TAP: $service/$table"
             python3 scripts/tap_downloader.py "$service" "$table" && \
-              for f in data/tap_*.json; do
+              for f in data/tap_*.json data/tap_*.csv; do
                 [ -f "$f" ] && gh release upload v1.0 "$f" --clobber && mv "$f" "data/uploaded/"
               done
             sleep 2

@@ -14,18 +14,19 @@ TAP_CONFIGS = {
     },
     "heasarc": {
         "url": "https://heasarc.gsfc.nasa.gov/xamin/vo/tap/sync",
-        "params": "REQUEST=doQuery&LANG=ADQL&FORMAT=csv",
+        "params": "REQUEST=doQuery&LANG=ADQL",
         "max_top": 100000,
         "ra_col": "ra",
         "quote_table": False,
-        "format": "csv",
+        "format": "votable",
     },
     "irsa": {
         "url": "https://irsa.ipac.caltech.edu/TAP/sync",
-        "params": "LANG=ADQL&FORMAT=json",
+        "params": "LANG=ADQL&FORMAT=csv",
         "max_top": 50000,
         "ra_col": "ra",
         "quote_table": False,
+        "format": "csv",
     },
     "gaia": {
         "url": "https://gea.esac.esa.int/tap-server/tap/sync",
@@ -86,43 +87,18 @@ def download_table(service, table_id, max_rows=None):
         print(f"  query failed", flush=True)
         return None
     rows = d["data"]
-    
-    if len(rows) < cfg["max_top"]:
-        # Fits in one query — save directly
-        out = [{cols[i]: r[i] for i in range(min(len(cols), len(r)))} for r in rows]
-        fn = f"data/tap_{service}_{table_id.replace('/','_').replace('+','plus')}.json"
-        if cfg.get("format") == "csv":
-            fn = fn.replace(".json", ".csv")
-            with open(fn, "w") as f:
-                f.write(",".join(cols) + "\n")
-                for r in rows:
-                    f.write(",".join(str(x) if x is not None else "" for x in r) + "\n")
-        else:
-            with open(fn, "w") as f:
-                json.dump(out, f)
-        print(f"  single query: {len(out)} rows -> {os.path.getsize(fn)//1024}KB", flush=True)
-        return out
-    
-    # Giant table — paginate by RA range
-    print(f"  >= {cfg['max_top']} rows — paginating by {ra_col}", flush=True)
-    all_rows = []
-    lo, step, hi_max = 0, 5, 365 if ra_col.startswith("_") else 360
-    while lo < hi_max:
-        hi = min(lo + step, hi_max)
-        q = f'SELECT {col_str} FROM {table_ref} WHERE {ra_col} >= {lo} AND {ra_col} < {hi}'
-        try:
-            d = tap_query(service, q, timeout=60)
-            chunk = d["data"] if d and "data" in d else []
-            all_rows.extend(chunk)
-            if len(all_rows) % 50000 == 0:
-                print(f"    [{lo},{hi}): {len(all_rows)} total", flush=True)
-        except Exception as e:
-            print(f"    [{lo},{hi}) failed: {e}", flush=True)
-        lo = hi
-        time.sleep(0.3)
-    
-    out = [{cols[i]: r[i] for i in range(min(len(cols), len(r)))} for r in all_rows]
-    print(f"  paginated: {len(out)} rows", flush=True)
+    out = [{cols[i]: r[i] for i in range(min(len(cols), len(r)))} for r in rows]
+    fn = f"data/tap_{service}_{table_id.replace('/','_').replace('+','plus')}.json"
+    if cfg.get("format") == "csv":
+        fn = fn.replace(".json", ".csv")
+        with open(fn, "w") as f:
+            f.write(",".join(cols) + "\n")
+            for r in rows:
+                f.write(",".join(str(x) if x is not None else "" for x in r) + "\n")
+    else:
+        with open(fn, "w") as f:
+            json.dump(out, f)
+    print(f"  {len(out)} rows, {os.path.getsize(fn)//1024}KB", flush=True)
     return out
 
 if __name__ == "__main__":
